@@ -18,7 +18,7 @@ public class DeviationCalculator {
     private record Range(double normalMin, double normalMax, double critLow, double critHigh) {}
 
     private static final Map<String, Range> RANGES = Map.ofEntries(
-        Map.entry("coolant_temp",           new Range(70, 85, 50, 95)),
+        Map.entry("coolant_temp",           new Range(60, 90, 40, 105)),
         Map.entry("oil_temp",               new Range(65, 85, 40, 100)),
         Map.entry("exhaust_temp",           new Range(350, 520, 150, 600)),
         Map.entry("traction_motor_temp",    new Range(60, 120, 30, 160)),
