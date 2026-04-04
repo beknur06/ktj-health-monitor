@@ -46,6 +46,11 @@ redis:
     health-prefix: health_index
     ttl-seconds: 300
 
+clickhouse:
+  url: ${SPRING_CLICKHOUSE_URL:jdbc:ch://${{ clickhouse-server.RAILWAY_PRIVATE_DOMAIN }}:8123/digitaltwin?ssl=false&connect_timeout=10000&socket_timeout=300000&compress=0}
+  username: ${CLICKHOUSE_USER:app}
+  password: ${CLICKHOUSE_PASS:app123}
+
 health-index:
   snapshot-interval-seconds: 10
   trend-window-size: 30
