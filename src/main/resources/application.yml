@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: health-index-service
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
+    listener:
+      simple:
+        concurrency: 2
+        max-concurrency: 4
+        prefetch: 50
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/telemetry
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASS:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+
+server:
+  port: 8083
+
+rabbitmq:
+  queue:
+    health-index: telemetry.health-index
+
+redis:
+  channel:
+    health: health
+  key:
+    health-prefix: health_index
+    ttl-seconds: 300
+
+health-index:
+  snapshot-interval-seconds: 10
+  trend-window-size: 30
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
