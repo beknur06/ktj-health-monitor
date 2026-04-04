@@ -21,7 +21,7 @@ public class HealthSnapshot {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
-    @Column(nullable = false)
+    @Column(name = "locomotiveId", nullable = false)
     private String locomotiveId;
 
     @Column(nullable = false)
@@ -32,10 +32,10 @@ public class HealthSnapshot {
     private Category category;
 
     /** JSON массив top-5 факторов */
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "topFactorsJson", columnDefinition = "TEXT")
     private String topFactorsJson;
 
-    @Column(nullable = false)
+    @Column(name = "calculatedAt", nullable = false)
     private Instant calculatedAt;
 
     public enum Category {

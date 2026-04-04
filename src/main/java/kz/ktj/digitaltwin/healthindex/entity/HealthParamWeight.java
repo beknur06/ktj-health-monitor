@@ -23,25 +23,25 @@ public class HealthParamWeight {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
-    @Column(nullable = false)
+    @Column(name = "paramName", nullable = false)
     private String paramName;
 
-    @Column(nullable = false)
+    @Column(name = "displayName", nullable = false)
     private String displayName;
 
     @Column(nullable = false)
     private double weight;
 
-    @Column(nullable = false)
+    @Column(name = "penaltyMultiplier", nullable = false)
     private double penaltyMultiplier = 1.5;
 
-    @Column(nullable = false)
+    @Column(name = "warningThreshold", nullable = false)
     private double warningThreshold = 0.5;
 
-    @Column(nullable = false)
+    @Column(name = "criticalThreshold", nullable = false)
     private double criticalThreshold = 0.8;
 
     /** Применимо к KZ8A, TE33A, или обоим */
-    @Column(nullable = false)
+    @Column(name = "applicableTo", nullable = false)
     private String applicableTo = "BOTH";
 }
