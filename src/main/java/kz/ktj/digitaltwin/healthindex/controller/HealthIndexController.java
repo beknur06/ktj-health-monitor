@@ -11,13 +11,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * REST API для индекса здоровья.
- *
- *   GET  /api/v1/health/config          — текущие веса
- *   PUT  /api/v1/health/config/{id}     — обновить вес (без перекомпиляции!)
- *   GET  /api/v1/health/{locoId}/history — история снимков
- */
 @RestController
 @RequestMapping("/api/v1/health")
 public class HealthIndexController {
@@ -31,20 +24,11 @@ public class HealthIndexController {
         this.snapshotRepository = snapshotRepository;
     }
 
-    /**
-     * GET /api/v1/health/config
-     * Получить все текущие веса и пороги.
-     */
     @GetMapping("/config")
     public ResponseEntity<List<HealthParamWeight>> getConfig() {
         return ResponseEntity.ok(weightRepository.findAll());
     }
 
-    /**
-     * PUT /api/v1/health/config/{id}
-     * Обновить вес/порог конкретного параметра.
-     * Изменения подхватываются калькулятором через кеш (TTL 1 мин).
-     */
     @PutMapping("/config/{id}")
     public ResponseEntity<HealthParamWeight> updateWeight(
             @PathVariable java.util.UUID id,
@@ -61,10 +45,6 @@ public class HealthIndexController {
             .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * GET /api/v1/health/{locomotiveId}/history?from=...&to=...
-     * История снимков индекса здоровья.
-     */
     @GetMapping("/{locomotiveId}/history")
     public ResponseEntity<List<HealthSnapshot>> getHistory(
             @PathVariable String locomotiveId,
@@ -75,10 +55,6 @@ public class HealthIndexController {
         return ResponseEntity.ok(snapshots);
     }
 
-    /**
-     * GET /api/v1/health/{locomotiveId}/latest
-     * Последние 30 снимков (для быстрого тренда).
-     */
     @GetMapping("/{locomotiveId}/latest")
     public ResponseEntity<List<HealthSnapshot>> getLatest(@PathVariable String locomotiveId) {
         return ResponseEntity.ok(

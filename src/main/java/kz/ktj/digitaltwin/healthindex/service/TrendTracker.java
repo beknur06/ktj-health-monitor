@@ -8,14 +8,6 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Отслеживает тренд индекса здоровья за последние N значений.
- *
- * Простая линейная регрессия по скользящему окну:
- *   - Если slope > +0.5 за 30 тиков → IMPROVING
- *   - Если slope < -0.5 → DEGRADING
- *   - Иначе → STABLE
- */
 @Service
 public class TrendTracker {
 
@@ -26,9 +18,6 @@ public class TrendTracker {
         this.windowSize = windowSize;
     }
 
-    /**
-     * Добавляет новый скор и возвращает текущий тренд.
-     */
     public HealthTrend updateAndGetTrend(String locomotiveId, double score) {
         Deque<Double> window = windows.computeIfAbsent(locomotiveId, k -> new ArrayDeque<>());
 
@@ -38,10 +27,9 @@ public class TrendTracker {
         }
 
         if (window.size() < 5) {
-            return HealthTrend.STABLE; // недостаточно данных
+            return HealthTrend.STABLE;
         }
 
-        // Линейная регрессия: y = a + b*x
         double slope = calculateSlope(window);
 
         if (slope > 0.5) return HealthTrend.IMPROVING;
@@ -49,11 +37,6 @@ public class TrendTracker {
         return HealthTrend.STABLE;
     }
 
-    /**
-     * Наклон линейной регрессии (метод наименьших квадратов).
-     * slope > 0 = скор растёт (улучшение)
-     * slope < 0 = скор падает (деградация)
-     */
     private double calculateSlope(Deque<Double> values) {
         int n = values.size();
         double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;

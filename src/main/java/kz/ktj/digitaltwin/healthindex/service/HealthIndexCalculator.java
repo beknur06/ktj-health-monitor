@@ -14,35 +14,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Расчёт индекса здоровья локомотива.
- *
- * ════════════════════════════════════════════════
- * ФОРМУЛА:
- *
- *   score = 100 - Σ(impact_i) - dtcPenalty
- *
- *   impact_i = weight_i × deviation_i × 100 × multiplier
- *
- *   где:
- *     weight_i    = вес параметра (из конфига, сумма = 1.0)
- *     deviation_i = отклонение от нормы (0..1)
- *     multiplier  = 1.0 (норма/внимание) или penaltyMultiplier (критично)
- *     dtcPenalty  = 5 баллов за каждый активный код ошибки
- *
- * ════════════════════════════════════════════════
- *
- * Пример:
- *   coolant_temp = 92°C → deviation = 0.7 (норма до 85, крит 95)
- *   weight = 0.10, penalty = 1.0 (ещё не критично)
- *   impact = 0.10 × 0.7 × 100 = 7.0 баллов
- *
- *   oil_pressure = 0.12 МПа → deviation = 1.0 (ниже крит 0.15)
- *   weight = 0.10, penalty = 2.5 (критично!)
- *   impact = 0.10 × 1.0 × 100 × 2.5 = 25.0 баллов
- *
- *   score = 100 - 7.0 - 25.0 - ... = зависит от остальных
- */
+// score = 100 - Σ(weight × deviation × 100 × multiplier) - dtcPenalty
 @Service
 public class HealthIndexCalculator {
 
@@ -53,10 +25,9 @@ public class HealthIndexCalculator {
     private final DeviationCalculator deviationCalculator;
     private final TrendTracker trendTracker;
 
-    /** Кеш весов — перечитывается из БД при изменении */
     private volatile Map<String, HealthParamWeight> weightCache = new HashMap<>();
     private volatile long lastCacheRefresh = 0;
-    private static final long CACHE_TTL_MS = 60_000; // 1 мин
+    private static final long CACHE_TTL_MS = 60_000;
 
     public HealthIndexCalculator(HealthParamWeightRepository weightRepository,
                                   DeviationCalculator deviationCalculator,
@@ -66,9 +37,6 @@ public class HealthIndexCalculator {
         this.trendTracker = trendTracker;
     }
 
-    /**
-     * Рассчитать индекс здоровья по одному сообщению телеметрии.
-     */
     public HealthIndexResult calculate(TelemetryEnvelope envelope) {
         refreshCacheIfNeeded();
 
@@ -78,22 +46,18 @@ public class HealthIndexCalculator {
         List<FactorContribution> allFactors = new ArrayList<>();
         double totalImpact = 0;
 
-        // Для каждого параметра с известным весом
         for (Map.Entry<String, HealthParamWeight> entry : weightCache.entrySet()) {
             String paramName = entry.getKey();
             HealthParamWeight config = entry.getValue();
 
-            // Проверяем применимость к типу локомотива
             if (!isApplicable(config.getApplicableTo(), locoType)) continue;
 
             Double rawValue = params.get(paramName);
             if (rawValue == null) continue;
 
-            // Рассчитываем отклонение
             double deviation = deviationCalculator.calculate(paramName, rawValue);
-            if (deviation < 0) continue; // неизвестный параметр
+            if (deviation < 0) continue;
 
-            // Определяем severity
             String severity;
             double multiplier;
             if (deviation >= config.getCriticalThreshold()) {
@@ -107,7 +71,6 @@ public class HealthIndexCalculator {
                 multiplier = 1.0;
             }
 
-            // Рассчитываем impact
             double impact = config.getWeight() * deviation * 100.0 * multiplier;
             totalImpact += impact;
 
@@ -122,32 +85,23 @@ public class HealthIndexCalculator {
                 .build());
         }
 
-        // DTC penalty
-        double dtcPenalty = 0;
-        if (envelope.getActiveDtcCodes() != null) {
-            dtcPenalty = envelope.getActiveDtcCodes().size() * DTC_PENALTY_PER_CODE;
-        }
+        double dtcPenalty = envelope.getActiveDtcCodes() != null
+            ? envelope.getActiveDtcCodes().size() * DTC_PENALTY_PER_CODE : 0;
 
-        // Final score
-        double score = Math.max(0, Math.min(100, 100 - totalImpact - dtcPenalty));
-        score = round(score);
+        double score = round(Math.max(0, Math.min(100, 100 - totalImpact - dtcPenalty)));
 
-        // Category
         HealthCategory category;
         if (score >= 75) category = HealthCategory.NORMAL;
         else if (score >= 50) category = HealthCategory.ATTENTION;
         else category = HealthCategory.CRITICAL;
 
-        // Top-5 factors sorted by impact (descending)
         List<FactorContribution> topFactors = allFactors.stream()
-            .filter(f -> f.getImpact() > 0.1) // skip negligible
+            .filter(f -> f.getImpact() > 0.1)
             .sorted(Comparator.comparingDouble(FactorContribution::getImpact).reversed())
             .limit(5)
             .toList();
 
-        // Trend
-        HealthIndexResult.HealthTrend trend = trendTracker.updateAndGetTrend(
-            envelope.getLocomotiveId(), score);
+        HealthIndexResult.HealthTrend trend = trendTracker.updateAndGetTrend(envelope.getLocomotiveId(), score);
 
         return HealthIndexResult.builder()
             .locomotiveId(envelope.getLocomotiveId())
@@ -158,8 +112,7 @@ public class HealthIndexCalculator {
             .trend(trend)
             .topFactors(topFactors)
             .dtcPenalty(round(dtcPenalty))
-            .activeAlerts(envelope.getActiveDtcCodes() != null
-                ? envelope.getActiveDtcCodes().size() : 0)
+            .activeAlerts(envelope.getActiveDtcCodes() != null ? envelope.getActiveDtcCodes().size() : 0)
             .build();
     }
 
@@ -173,9 +126,7 @@ public class HealthIndexCalculator {
         if (now - lastCacheRefresh > CACHE_TTL_MS) {
             List<HealthParamWeight> all = weightRepository.findAll();
             Map<String, HealthParamWeight> newCache = new LinkedHashMap<>();
-            for (HealthParamWeight w : all) {
-                newCache.put(w.getParamName(), w);
-            }
+            for (HealthParamWeight w : all) newCache.put(w.getParamName(), w);
             weightCache = newCache;
             lastCacheRefresh = now;
             log.debug("Refreshed weight cache: {} entries", newCache.size());

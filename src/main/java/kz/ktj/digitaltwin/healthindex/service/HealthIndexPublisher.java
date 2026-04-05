@@ -15,12 +15,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Публикует результат расчёта:
- *  1. Redis SET   health_index:{locoId} — текущий скор (для WS snapshot)
- *  2. Redis PUB   health:{locoId}       — для realtime дашборда
- *  3. PostgreSQL  health_snapshots      — каждые N секунд (для истории)
- */
 @Service
 public class HealthIndexPublisher {
 
@@ -34,7 +28,6 @@ public class HealthIndexPublisher {
     private final Duration ttl;
     private final int snapshotIntervalSeconds;
 
-    /** Последний snapshot timestamp per locomotive */
     private final ConcurrentHashMap<String, Instant> lastSnapshotTime = new ConcurrentHashMap<>();
 
     public HealthIndexPublisher(
@@ -59,13 +52,8 @@ public class HealthIndexPublisher {
             String json = objectMapper.writeValueAsString(result);
             String locoId = result.getLocomotiveId();
 
-            // 1. Redis SET (for snapshot on WS connect)
             redis.opsForValue().set(keyPrefix + ":" + locoId, json, ttl);
-
-            // 2. Redis PUBLISH (realtime to API Gateway → WebSocket → UI)
             redis.convertAndSend(channelPrefix + ":" + locoId, json);
-
-            // 3. PostgreSQL snapshot (throttled)
             persistSnapshotIfDue(result);
 
             log.debug("Published health index for {}: score={} category={} trend={}",
@@ -83,7 +71,7 @@ public class HealthIndexPublisher {
 
         if (lastTime != null &&
             Duration.between(lastTime, now).getSeconds() < snapshotIntervalSeconds) {
-            return; // too soon
+            return;
         }
 
         try {
