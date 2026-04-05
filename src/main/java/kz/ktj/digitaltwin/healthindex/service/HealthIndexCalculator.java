@@ -14,12 +14,14 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-// score = 100 - Σ(weight × deviation × 100 × multiplier) - dtcPenalty
+// score = 100 - Σ(weight × deviation^0.8 × 100 × multiplier) - dtcPenalty
 @Service
 public class HealthIndexCalculator {
 
     private static final Logger log = LoggerFactory.getLogger(HealthIndexCalculator.class);
-    private static final double DTC_PENALTY_PER_CODE = 5.0;
+    private static final double DTC_PENALTY_PER_CODE = 10.0;
+    private static final double DEVIATION_EXPONENT   = 0.8;   // <1 = harsher for partial deviations
+    private static final double WARNING_MULTIPLIER   = 1.5;
 
     private final HealthParamWeightRepository weightRepository;
     private final DeviationCalculator deviationCalculator;
@@ -58,6 +60,8 @@ public class HealthIndexCalculator {
             double deviation = deviationCalculator.calculate(paramName, rawValue);
             if (deviation < 0) continue;
 
+            double curvedDev = deviation > 0 ? Math.pow(deviation, DEVIATION_EXPONENT) : 0;
+
             String severity;
             double multiplier;
             if (deviation >= config.getCriticalThreshold()) {
@@ -65,20 +69,20 @@ public class HealthIndexCalculator {
                 multiplier = config.getPenaltyMultiplier();
             } else if (deviation >= config.getWarningThreshold()) {
                 severity = "WARNING";
-                multiplier = 1.0;
+                multiplier = WARNING_MULTIPLIER;
             } else {
                 severity = "NORMAL";
                 multiplier = 1.0;
             }
 
-            double impact = config.getWeight() * deviation * 100.0 * multiplier;
+            double impact = config.getWeight() * curvedDev * 100.0 * multiplier;
             totalImpact += impact;
 
             allFactors.add(FactorContribution.builder()
                 .paramName(paramName)
                 .displayName(config.getDisplayName())
                 .rawValue(rawValue)
-                .normalizedDeviation(round(deviation))
+                .normalizedDeviation(round(curvedDev))
                 .weight(config.getWeight())
                 .impact(round(impact))
                 .severity(severity)
@@ -91,8 +95,8 @@ public class HealthIndexCalculator {
         double score = round(Math.max(0, Math.min(100, 100 - totalImpact - dtcPenalty)));
 
         HealthCategory category;
-        if (score >= 75) category = HealthCategory.NORMAL;
-        else if (score >= 50) category = HealthCategory.ATTENTION;
+        if (score >= 80) category = HealthCategory.NORMAL;
+        else if (score >= 60) category = HealthCategory.ATTENTION;
         else category = HealthCategory.CRITICAL;
 
         List<FactorContribution> topFactors = allFactors.stream()
