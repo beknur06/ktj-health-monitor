@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class DefaultWeightsInitializer {
@@ -22,13 +24,6 @@ public class DefaultWeightsInitializer {
 
     @PostConstruct
     public void init() {
-        if (repository.count() > 0) {
-            log.info("Health param weights already configured ({} entries)", repository.count());
-            return;
-        }
-
-        log.info("Seeding default health param weights...");
-
         List<HealthParamWeight> defaults = List.of(
             weight("coolant_temp",          "Охл. жидкость",         0.10, 1.8, 0.5, 0.8, "TE33A"),
             weight("oil_temp",              "Масло двигателя",       0.06, 1.5, 0.5, 0.8, "TE33A"),
@@ -49,8 +44,22 @@ public class DefaultWeightsInitializer {
             weight("boost_pressure",        "Давление наддува",      0.05, 1.5, 0.5, 0.8, "TE33A")
         );
 
-        repository.saveAll(defaults);
-        log.info("Seeded {} default health param weights", defaults.size());
+        Set<String> existing = repository.findAll().stream()
+                .map(HealthParamWeight::getParamName)
+                .collect(Collectors.toSet());
+
+        List<HealthParamWeight> missing = defaults.stream()
+                .filter(w -> !existing.contains(w.getParamName()))
+                .collect(Collectors.toList());
+
+        if (missing.isEmpty()) {
+            log.info("Health param weights already fully configured ({} entries)", existing.size());
+            return;
+        }
+
+        repository.saveAll(missing);
+        log.info("Seeded {} missing health param weights (had {}, now {})",
+                missing.size(), existing.size(), existing.size() + missing.size());
     }
 
     private HealthParamWeight weight(String param, String display, double w,
